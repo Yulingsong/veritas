@@ -1,0 +1,108 @@
+{
+  "name": "ai-test-v2",
+  "displayName": "AI-Test V2",
+  "description": "AI-powered frontend testing with real browser and API data",
+  "version": "1.0.0",
+  "publisher": "ai-test",
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "categories": [
+    "Testing",
+    "Programming Languages"
+  ],
+  "activationEvents": [
+    "onLanguage:typescript",
+    "onLanguage:javascript",
+    "onLanguage:typescriptreact",
+    "onLanguage:javascriptreact",
+    "onLanguage:vue",
+    "onCommand:ai-test.generate",
+    "onCommand:ai-test.record",
+    "onCommand:ai-test.auto",
+    "onCommand:ai-test.startServer"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "ai-test.generate",
+        "title": "AI-Test: Generate Tests",
+        "category": "AI-Test"
+      },
+      {
+        "command": "ai-test.record",
+        "title": "AI-Test: Record Traffic",
+        "category": "AI-Test"
+      },
+      {
+        "command": "ai-test.auto",
+        "title": "AI-Test: Auto Generate (Code + Traffic)",
+        "category": "AI-Test"
+      },
+      {
+        "command": "ai-test.openPanel",
+        "title": "AI-Test: Open Test Panel",
+        "category": "AI-Test"
+      }
+    ],
+    "configuration": {
+      "title": "AI-Test V2",
+      "properties": {
+        "aiTest.openAIKey": {
+          "type": "string",
+          "default": "",
+          "description": "OpenAI API Key for test generation"
+        },
+        "aiTest.defaultFramework": {
+          "type": "string",
+          "default": "react",
+          "enum": ["react", "vue", "next", "nuxt"],
+          "description": "Default framework"
+        },
+        "aiTest.defaultTestFramework": {
+          "type": "string",
+          "default": "vitest",
+          "enum": ["vitest", "jest", "playwright"],
+          "description": "Default test framework"
+        },
+        "aiTest.headless": {
+          "type": "boolean",
+          "default": true,
+          "description": "Run browser in headless mode"
+        }
+      }
+    },
+    "viewsContainers": {
+      "panel": [
+        {
+          "id": "ai-test-panel",
+          "title": "AI-Test",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "panel": [
+        {
+          "id": "ai-test-view",
+          "type": "webview",
+          "name": "AI-Test Panel"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.80.0",
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "ai-test-v2": "^1.0.0"
+  }
+}
