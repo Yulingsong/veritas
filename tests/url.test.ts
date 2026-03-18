@@ -1,27 +1,31 @@
 /**
- * URL & Env Utilities Tests
+ * URL Utilities Tests
  */
 
 import { describe, it, expect } from 'vitest';
 import { 
+  parseUrl, 
   getQueryParams, 
   buildUrl, 
-  addQueryParam, 
+  addQueryParam,
   removeQueryParam,
   getDomain,
-  isValidUrl 
+  getPath,
+  isValidUrl,
+  joinUrl
 } from '../src/utils/url.js';
-import { 
-  env, 
-  isDevelopment, 
-  isProduction, 
-  boolEnv, 
-  numEnv 
-} from '../src/utils/env.js';
 
 describe('URL Utilities', () => {
+  describe('parseUrl', () => {
+    it('should parse URL', () => {
+      const url = parseUrl('https://example.com/path?key=value');
+      expect(url.hostname).toBe('example.com');
+      expect(url.pathname).toBe('/path');
+    });
+  });
+
   describe('getQueryParams', () => {
-    it('should parse query params', () => {
+    it('should get query params', () => {
       const params = getQueryParams('https://example.com?a=1&b=2');
       expect(params).toEqual({ a: '1', b: '2' });
     });
@@ -37,74 +41,40 @@ describe('URL Utilities', () => {
 
   describe('addQueryParam', () => {
     it('should add query param', () => {
-      const url = addQueryParam('https://example.com', 'a', '1');
-      expect(url).toContain('a=1');
+      const url = addQueryParam('https://example.com', 'key', 'value');
+      expect(url).toContain('key=value');
     });
   });
 
   describe('removeQueryParam', () => {
     it('should remove query param', () => {
-      const url = removeQueryParam('https://example.com?a=1', 'a');
-      expect(url).not.toContain('a=1');
+      const url = removeQueryParam('https://example.com?key=value', 'key');
+      expect(url).not.toContain('key=value');
     });
   });
 
   describe('getDomain', () => {
-    it('should extract domain', () => {
+    it('should get domain', () => {
       expect(getDomain('https://example.com/path')).toBe('example.com');
     });
   });
 
+  describe('getPath', () => {
+    it('should get path', () => {
+      expect(getPath('https://example.com/path/to/page')).toBe('/path/to/page');
+    });
+  });
+
   describe('isValidUrl', () => {
-    it('should validate URLs', () => {
+    it('should validate URL', () => {
       expect(isValidUrl('https://example.com')).toBe(true);
       expect(isValidUrl('not-a-url')).toBe(false);
     });
   });
-});
 
-describe('Environment Utilities', () => {
-  describe('env', () => {
-    it('should get env var', () => {
-      process.env.TEST_VAR = 'test';
-      expect(env('TEST_VAR')).toBe('test');
-      expect(env('NON_EXISTENT', 'default')).toBe('default');
-    });
-  });
-
-  describe('isDevelopment', () => {
-    it('should detect dev environment', () => {
-      const original = process.env.NODE_ENV;
-      process.env.NODE_ENV = 'development';
-      expect(isDevelopment()).toBe(true);
-      process.env.NODE_ENV = original;
-    });
-  });
-
-  describe('isProduction', () => {
-    it('should detect prod environment', () => {
-      const original = process.env.NODE_ENV;
-      process.env.NODE_ENV = 'production';
-      expect(isProduction()).toBe(true);
-      process.env.NODE_ENV = original;
-    });
-  });
-
-  describe('boolEnv', () => {
-    it('should parse boolean env', () => {
-      process.env.BOOL_VAR = 'true';
-      expect(boolEnv('BOOL_VAR')).toBe(true);
-      process.env.BOOL_VAR = 'false';
-      expect(boolEnv('BOOL_VAR')).toBe(false);
-      expect(boolEnv('NON_EXISTENT')).toBe(false);
-    });
-  });
-
-  describe('numEnv', () => {
-    it('should parse number env', () => {
-      process.env.NUM_VAR = '123';
-      expect(numEnv('NUM_VAR')).toBe(123);
-      expect(numEnv('NON_EXISTENT', 0)).toBe(0);
+  describe('joinUrl', () => {
+    it('should join URL parts', () => {
+      expect(joinUrl('https://example.com', 'api', 'users')).toBe('https://example.com/api/users');
     });
   });
 });

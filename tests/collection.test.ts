@@ -49,8 +49,8 @@ describe('Collection Utilities', () => {
 
   describe('get', () => {
     it('should get nested value', () => {
-      const obj = { a: { b: { c: 123 } };
-      expect(get(obj, 'a.b.c')).toBe(123);
+      const obj = { a: { b: { c: 1 } } };
+      expect(get(obj, 'a.b.c')).toBe(1);
       expect(get(obj, 'a.b.d', 'default')).toBe('default');
     });
   });
@@ -58,8 +58,8 @@ describe('Collection Utilities', () => {
   describe('set', () => {
     it('should set nested value', () => {
       const obj: any = {};
-      set(obj, 'a.b.c', 123);
-      expect(obj.a.b.c).toBe(123);
+      set(obj, 'a.b.c', 1);
+      expect(obj.a.b.c).toBe(1);
     });
   });
 
@@ -73,8 +73,8 @@ describe('Collection Utilities', () => {
 
   describe('del', () => {
     it('should delete nested property', () => {
-      const obj: any = { a: { b: { c: 1 } } };
-      del(obj, 'a.b.c');
+      const obj = { a: { b: { c: 1 } } };
+      expect(del(obj, 'a.b.c')).toBe(true);
       expect(has(obj, 'a.b.c')).toBe(false);
     });
   });
