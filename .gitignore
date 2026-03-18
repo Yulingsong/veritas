@@ -6,11 +6,8 @@ dist-cjs/
 .vscode-test/
 *.vsix
 
-# Test output
-tests/
+# Test output (excluded)
 __tests__/
-*.test.ts
-*.spec.ts
 coverage/
 
 # Traffic recordings
