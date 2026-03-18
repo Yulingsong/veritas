@@ -1,15 +1,12 @@
 /**
- * JSON & Storage Utilities Tests
+ * JSON Utilities Tests
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import * as fs from 'fs';
-import * as path from 'path';
-import * as os from 'os';
+import { describe, it, expect } from 'vitest';
 import { 
   jsonParse, 
   jsonStringify, 
-  queryStringToObject, 
+  queryStringToObject,
   objectToQueryString,
   flattenObject,
   unflattenObject
@@ -22,13 +19,19 @@ describe('JSON Utilities', () => {
     });
 
     it('should return default for invalid JSON', () => {
-      expect(jsonParse('invalid', { a: 1 })).toEqual({ a: 1 });
+      expect(jsonParse('invalid', { fallback: true })).toEqual({ fallback: true });
+      expect(jsonParse('invalid')).toBeNull();
     });
   });
 
   describe('jsonStringify', () => {
-    it('should stringify JSON', () => {
+    it('should stringify object', () => {
       expect(jsonStringify({ a: 1 })).toBe('{"a":1}');
+    });
+
+    it('should pretty print', () => {
+      const result = jsonStringify({ a: 1 }, true);
+      expect(result).toContain('\n');
     });
   });
 
@@ -40,40 +43,21 @@ describe('JSON Utilities', () => {
 
   describe('objectToQueryString', () => {
     it('should convert object to query string', () => {
-      expect(objectToQueryString({ a: 1, b: 2 })).toBe('a=1&b=2');
+      expect(objectToQueryString({ a: '1', b: '2' })).toBe('a=1&b=2');
     });
   });
 
   describe('flattenObject', () => {
     it('should flatten nested object', () => {
-      const obj = { a: { b: { c: 1 } } };
-      expect(flattenObject(obj)).toEqual({ 'a.b.c': 1 });
+      const result = flattenObject({ a: { b: { c: 1 } });
+      expect(result).toEqual({ 'a.b.c': 1 });
     });
   });
 
   describe('unflattenObject', () => {
     it('should unflatten object', () => {
-      const obj = { 'a.b.c': 1 };
-      expect(unflattenObject(obj)).toEqual({ a: { b: { c: 1 } } });
+      const result = unflattenObject({ 'a.b.c': 1 });
+      expect(result).toEqual({ a: { b: { c: 1 } });
     });
   });
-});
-
-describe('Storage Utilities', () => {
-  const tmpDir = path.join(os.tmpdir(), 'veritas-test-' + Date.now());
-  
-  beforeEach(() => {
-    if (!fs.existsSync(tmpDir)) {
-      fs.mkdirSync(tmpDir, { recursive: true });
-    }
-  });
-  
-  afterEach(() => {
-    if (fs.existsSync(tmpDir)) {
-      fs.rmSync(tmpDir, { recursive: true });
-    }
-  });
-
-  // Note: LocalStorage and MemoryCache tests would go here
-  // They're tested indirectly through integration tests
 });
