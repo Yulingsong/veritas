@@ -1,207 +1,165 @@
 /**
- * Validation Utilities
+ * Test Configuration Validation
  */
 
 import * as fs from 'fs';
 import * as path from 'path';
 
+/**
+ * Validation rule
+ */
+export interface ValidationRule {
+  field: string;
+  type: 'required' | 'type' | 'enum' | 'pattern' | 'custom';
+  value?: any;
+  message?: string;
+}
+
+/**
+ * Config validator
+ */
+export class ConfigValidator {
+  private rules: ValidationRule[] = [];
+
+  /**
+   * Add rule
+   */
+  addRule(rule: ValidationRule): this {
+    this.rules.push(rule);
+    return this;
+  }
+
+  /**
+   * Required field
+   */
+  required(field: string, message?: string): this {
+    return this.addRule({ field, type: 'required', message });
+  }
+
+  /**
+   * Type check
+   */
+  typeOf(field: string, expectedType: string, message?: string): this {
+    return this.addRule({ field, type: 'type', value: expectedType, message });
+  }
+
+  /**
+   * Enum check
+   */
+  enum(field: string, values: any[], message?: string): this {
+    return this.addRule({ field, type: 'enum', value: values, message });
+  }
+
+  /**
+   * Pattern check
+   */
+  pattern(field: string, regex: RegExp, message?: string): this {
+    return this.addRule({ field, type: 'pattern', value: regex.source, message });
+  }
+
+  /**
+   * Custom validation
+   */
+  custom(field: string, fn: (value: any) => boolean, message?: string): this {
+    return this.addRule({ field, type: 'custom', value: fn, message });
+  }
+
+  /**
+   * Validate config
+   */
+  validate(config: any): ValidationResult {
+    const errors: string[] = [];
+
+    for (const rule of this.rules) {
+      const value = this.getValue(config, rule.field);
+
+      switch (rule.type) {
+        case 'required':
+          if (value === undefined || value === null) {
+            errors.push(rule.message || `Field ${rule.field} is required`);
+          }
+          break;
+
+        case 'type':
+          if (value !== undefined && typeof value !== rule.value) {
+            errors.push(rule.message || `Field ${rule.field} must be of type ${rule.value}`);
+          }
+          break;
+
+        case 'enum':
+          if (value !== undefined && !rule.value.includes(value)) {
+            errors.push(rule.message || `Field ${rule.field} must be one of: ${rule.value.join(', ')}`);
+          }
+          break;
+
+        case 'pattern':
+          if (value !== undefined && !new RegExp(rule.value).test(value)) {
+            errors.push(rule.message || `Field ${rule.field} does not match pattern`);
+          }
+          break;
+
+        case 'custom':
+          if (value !== undefined && !rule.value(value)) {
+            errors.push(rule.message || `Field ${rule.field} failed custom validation`);
+          }
+          break;
+      }
+    }
+
+    return {
+      valid: errors.length === 0,
+      errors
+    };
+  }
+
+  private getValue(obj: any, field: string): any {
+    return field.split('.').reduce((o, k) => o?.[k], obj);
+  }
+}
+
 export interface ValidationResult {
   valid: boolean;
   errors: string[];
-  warnings: string[];
 }
 
 /**
- * Validate test file
+ * Predefined validators
  */
-export function validateTestFile(filePath: string): ValidationResult {
-  const result: ValidationResult = { valid: true, errors: [], warnings: [] };
+export const validators = {
+  /**
+   * Validate Veritas config
+   */
+  veritasConfig(): ConfigValidator {
+    return new ConfigValidator()
+      .required('ai.provider')
+      .enum('ai.provider', ['openai', 'anthropic', 'gemini'])
+      .enum('generator.testFramework', ['vitest', 'jest', 'playwright'])
+      .enum('generator.testType', ['unit', 'component', 'integration', 'e2e'])
+      .typeOf('recorder.duration', 'number')
+      .typeOf('executor.timeout', 'number');
+  },
 
-  if (!fs.existsSync(filePath)) {
-    result.valid = false;
-    result.errors.push(`File not found: ${filePath}`);
-    return result;
+  /**
+   * Validate package.json
+   */
+  packageJson(): ConfigValidator {
+    return new ConfigValidator()
+      .required('name')
+      .required('version')
+      .typeOf('name', 'string')
+      .typeOf('version', 'string')
+      .pattern('name', /^[a-z@][a-z0-9-]*$/);
+  },
+
+  /**
+   * Validate GitHub Actions workflow
+   */
+  githubWorkflow(): ConfigValidator {
+    return new ConfigValidator()
+      .required('name')
+      .required('on')
+      .required('jobs');
   }
+};
 
-  const content = fs.readFileSync(filePath, 'utf-8');
-
-  // Check for imports
-  if (!content.includes('import')) {
-    result.warnings.push('No imports found');
-  }
-
-  // Check for describe/it blocks
-  if (!content.includes('describe') && !content.includes('it') && !content.includes('test')) {
-    result.warnings.push('No test blocks found (describe/it/test)');
-  }
-
-  // Check for expect assertions
-  if (!content.includes('expect')) {
-    result.warnings.push('No assertions found (expect)');
-  }
-
-  // Check for common issues
-  if (content.includes('// TODO')) {
-    result.warnings.push('Contains TODO comments');
-  }
-
-  if (content.includes('skip') || content.includes('pending')) {
-    result.warnings.push('Contains skipped tests');
-  }
-
-  return result;
-}
-
-/**
- * Validate component file
- */
-export function validateComponentFile(filePath: string): ValidationResult {
-  const result: ValidationResult = { valid: true, errors: [], warnings: [] };
-
-  if (!fs.existsSync(filePath)) {
-    result.valid = false;
-    result.errors.push(`File not found: ${filePath}`);
-    return result;
-  }
-
-  const content = fs.readFileSync(filePath, 'utf-8');
-  const ext = path.extname(filePath);
-
-  // Check file extension
-  if (!['.ts', '.tsx', '.js', '.jsx', '.vue', '.svelte'].includes(ext)) {
-    result.warnings.push(`Unusual file extension: ${ext}`);
-  }
-
-  // Check for React/framework imports
-  if (ext === '.tsx' || ext === '.jsx') {
-    if (!content.includes('react')) {
-      result.warnings.push('No React import found in .tsx/.jsx file');
-    }
-  }
-
-  // Check for export
-  if (!content.includes('export')) {
-    result.warnings.push('No export found');
-  }
-
-  return result;
-}
-
-/**
- * Validate configuration
- */
-export function validateConfig(config: any): ValidationResult {
-  const result: ValidationResult = { valid: true, errors: [], warnings: [] };
-
-  if (!config.ai?.provider) {
-    result.errors.push('AI provider is required');
-  }
-
-  if (!config.ai?.apiKey && !process.env.OPENAI_API_KEY && !process.env.ANTHROPIC_API_KEY) {
-    result.errors.push('API key is required');
-  }
-
-  if (config.recorder?.duration < 1000) {
-    result.warnings.push('Recorder duration is less than 1 second');
-  }
-
-  if (config.executor?.timeout < 5000) {
-    result.warnings.push('Executor timeout is less than 5 seconds');
-  }
-
-  result.valid = result.errors.length === 0;
-
-  return result;
-}
-
-/**
- * Validate URL
- */
-export function validateUrl(url: string): boolean {
-  try {
-    new URL(url);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-/**
- * Validate file path
- */
-export function validateFilePath(filePath: string): ValidationResult {
-  const result: ValidationResult = { valid: true, errors: [], warnings: [] };
-
-  // Check for absolute path
-  if (!path.isAbsolute(filePath)) {
-    result.warnings.push('Consider using absolute paths');
-  }
-
-  // Check for dangerous patterns
-  if (filePath.includes('..')) {
-    result.errors.push('Path contains dangerous ".." pattern');
-    result.valid = false;
-  }
-
-  // Check extension
-  const ext = path.extname(filePath);
-  const allowed = ['.ts', '.tsx', '.js', '.jsx', '.vue', '.svelte', '.json'];
-  if (ext && !allowed.includes(ext)) {
-    result.warnings.push(`Unusual file extension: ${ext}`);
-  }
-
-  return result;
-}
-
-/**
- * Validate test framework
- */
-export function validateTestFramework(framework: string): boolean {
-  return ['vitest', 'jest', 'playwright'].includes(framework);
-}
-
-/**
- * Validate framework
- */
-export function validateFramework(framework: string): boolean {
-  return ['react', 'vue', 'next', 'nuxt', 'svelte'].includes(framework);
-}
-
-/**
- * Sanitize filename
- */
-export function sanitizeFilename(filename: string): string {
-  return filename
-    .replace(/[^a-zA-Z0-9._-]/g, '_')
-    .replace(/_{2,}/g, '_')
-    .replace(/^_|_$/g, '');
-}
-
-/**
- * Validate traffic data
- */
-export function validateTrafficData(data: any): ValidationResult {
-  const result: ValidationResult = { valid: true, errors: [], warnings: [] };
-
-  if (!data) {
-    result.valid = false;
-    result.errors.push('Traffic data is empty');
-    return result;
-  }
-
-  if (!Array.isArray(data.requests)) {
-    result.errors.push('Missing requests array');
-    result.valid = false;
-  }
-
-  if (!Array.isArray(data.responses)) {
-    result.errors.push('Missing responses array');
-    result.valid = false;
-  }
-
-  if (data.requests?.length === 0) {
-    result.warnings.push('No requests recorded');
-  }
-
-  return result;
-}
+export default { ConfigValidator, validators };
