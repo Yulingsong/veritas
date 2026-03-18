@@ -1,235 +1,251 @@
-// VSCode Extension - Main Entry
+/**
+ * Veritas VSCode Extension
+ */
 
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { spawn } from 'child_process';
+import { exec } from 'child_process';
+import { promisify } from 'util';
 
-let panel: vscode.WebviewPanel | undefined;
+const execAsync = promisify(exec);
 
+// Command IDs
+const CMD_GENERATE = 'veritas.generate';
+const CMD_RECORD = 'veritas.record';
+const CMD_AUTO = 'veritas.auto';
+const CMD_ANALYZE = 'veritas.analyze';
+const CMD_CONFIG = 'veritas.config';
+
+// Status bar
+let statusBar: vscode.StatusBarItem;
+
+/**
+ * Activate extension
+ */
 export function activate(context: vscode.ExtensionContext) {
-  console.log('AI-Test V2 Extension Activated');
+  console.log('Veritas extension activated');
+
+  // Create status bar
+  statusBar = vscode.window.createStatusBarItem(
+    vscode.StatusBarAlignment.Left,
+    100
+  );
+  statusBar.text = '$(robot) Veritas';
+  statusBar.command = CMD_CONFIG;
+  statusBar.show();
 
   // Register commands
+  registerCommands(context);
+
+  // Register file watcher
+  registerFileWatcher(context);
+
+  // Register tree data provider
+  registerTestExplorer(context);
+
+  // Add to subscriptions
+  context.subscriptions.push(statusBar);
+}
+
+/**
+ * Register all commands
+ */
+function registerCommands(context: vscode.ExtensionContext) {
+  // Generate tests
   context.subscriptions.push(
-    vscode.commands.registerCommand('ai-test.generate', () => {
-      generateTests();
-    }),
-    vscode.commands.registerCommand('ai-test.record', () => {
-      recordTraffic();
-    }),
-    vscode.commands.registerCommand('ai-test.auto', () => {
-      autoGenerate();
-    }),
-    vscode.commands.registerCommand('ai-test.openPanel', () => {
-      openPanel();
+    vscode.commands.registerCommand(CMD_GENERATE, async (uri?: vscode.Uri) => {
+      const file = await getTargetFile(uri);
+      if (!file) return;
+      
+      await runVeritasCommand(`generate "${file}"`, 'Generate Tests');
+    })
+  );
+
+  // Record traffic
+  context.subscriptions.push(
+    vscode.commands.registerCommand(CMD_RECORD, async () => {
+      const url = await vscode.window.showInputBox({
+        prompt: 'Enter URL to record',
+        placeHolder: 'http://localhost:3000'
+      });
+      if (!url) return;
+      
+      await runVeritasCommand(`record "${url}"`, 'Record Traffic');
+    })
+  );
+
+  // Auto generate (record + test)
+  context.subscriptions.push(
+    vscode.commands.registerCommand(CMD_AUTO, async (uri?: vscode.Uri) => {
+      const file = await getTargetFile(uri);
+      if (!file) return;
+      
+      const url = await vscode.window.showInputBox({
+        prompt: 'Enter URL for traffic recording',
+        placeHolder: 'http://localhost:3000'
+      });
+      
+      const cmd = url ? `auto "${file}" --url "${url}"` : `generate "${file}"`;
+      await runVeritasCommand(cmd, 'Auto Generate');
+    })
+  );
+
+  // Analyze code
+  context.subscriptions.push(
+    vscode.commands.registerCommand(CMD_ANALYZE, async (uri?: vscode.Uri) => {
+      const file = await getTargetFile(uri);
+      if (!file) return;
+      
+      await runVeritasCommand(`analyze "${file}"`, 'Analyze Code');
+    })
+  );
+
+  // Open config
+  context.subscriptions.push(
+    vscode.commands.registerCommand(CMD_CONFIG, async () => {
+      const config = vscode.workspace.getConfiguration('veritas');
+      
+      const choice = await vscode.window.showQuickPick([
+        'View Configuration',
+        'Set API Key',
+        'Set Default Framework',
+        'Set Test Framework'
+      ], { placeHolder: 'Select action' });
+      
+      if (!choice) return;
+      
+      switch (choice) {
+        case 'View Configuration':
+          vscode.window.showInformationMessage(
+            `Provider: ${config.get('provider')}\nFramework: ${config.get('defaultFramework')}`
+          );
+          break;
+        case 'Set API Key':
+          const key = await vscode.window.showInputBox({
+            prompt: 'Enter API Key',
+            password: true
+          });
+          if (key) {
+            await config.update('apiKey', key, vscode.ConfigurationTarget.Global);
+            vscode.window.showInformationMessage('API Key saved');
+          }
+          break;
+      }
     })
   );
 }
 
 /**
- * Generate tests for current file
+ * Register file watcher
  */
-async function generateTests() {
-  const editor = vscode.window.activeTextEditor;
-  if (!editor) {
-    vscode.window.showWarningMessage('No file selected');
-    return;
-  }
-
-  const file = editor.document.fileName;
+function registerFileWatcher(context: vscode.ExtensionContext) {
+  const watcher = vscode.workspace.createFileSystemWatcher('**/*.test.ts');
   
-  // Get config
-  const config = vscode.workspace.getConfiguration('aiTest');
-  const apiKey = config.get<string>('openAIKey') || process.env.OPENAI_API_KEY;
-  
-  if (!apiKey) {
-    const input = await vscode.window.showInputBox({
-      prompt: 'Enter OpenAI API Key',
-      password: true
+  watcher.onDidCreate((uri) => {
+    vscode.window.showInformationMessage(
+      `Test created: ${path.basename(uri.fsPath)}`,
+      'Open'
+    ).then(choice => {
+      if (choice === 'Open') {
+        vscode.window.showTextDocument(uri);
+      }
     });
-    if (!input) return;
-    process.env.OPENAI_API_KEY = input;
-  }
-
-  await vscode.window.withProgress({
-    location: vscode.ProgressLocation.Notification,
-    title: 'AI-Test',
-    cancellable: false
-  }, async () => {
-    // Run ai-test generate
-    const terminal = vscode.window.createTerminal('AI-Test');
-    terminal.sendText(`ai-test generate "${file}"`);
-    terminal.show();
-  });
-}
-
-/**
- * Record traffic from URL
- */
-async function recordTraffic() {
-  const url = await vscode.window.showInputBox({
-    prompt: 'Enter URL to record traffic from',
-    value: 'http://localhost:3000'
   });
   
-  if (!url) return;
+  context.subscriptions.push(watcher);
+}
 
-  vscode.window.withProgress({
-    location: vscode.ProgressLocation.Notification,
-    title: 'AI-Test Recording',
-    cancellable: false
-  }, async () => {
-    const terminal = vscode.window.createTerminal('AI-Test Record');
-    terminal.sendText(`ai-test record "${url}"`);
-    terminal.show();
+/**
+ * Register test explorer
+ */
+function registerTestExplorer(context: vscode.ExtensionContext) {
+  vscode.window.registerTreeDataProvider('veritasTests', {
+    getChildren: () => {
+      const files = vscode.workspace.findFiles('**/*.test.ts', '**/node_modules/**');
+      return files.then(f => f.map(f => ({
+        label: path.basename(f.fsPath),
+        resourceUri: f,
+        command: {
+          command: 'vscode.open',
+          arguments: [f],
+          title: 'Open'
+        }
+      })));
+    }
   });
 }
 
 /**
- * Auto generate with traffic recording
+ * Get target file
  */
-async function autoGenerate() {
+async function getTargetFile(uri?: vscode.Uri): Promise<string | undefined> {
+  if (uri) {
+    return uri.fsPath;
+  }
+  
   const editor = vscode.window.activeTextEditor;
-  if (!editor) {
-    vscode.window.showWarningMessage('No file selected');
-    return;
+  if (editor) {
+    return editor.document.uri.fsPath;
   }
-
-  const file = editor.document.fileName;
-  const url = await vscode.window.showInputBox({
-    prompt: 'Enter URL for traffic recording (optional)',
-    value: 'http://localhost:3000'
-  });
-
-  vscode.window.withProgress({
-    location: vscode.ProgressLocation.Notification,
-    title: 'AI-Test Auto Generate',
-    cancellable: false
-  }, async () => {
-    const cmd = url 
-      ? `ai-test auto "${file}" --url "${url}"`
-      : `ai-test auto "${file}"`;
-    
-    const terminal = vscode.window.createTerminal('AI-Test Auto');
-    terminal.sendText(cmd);
-    terminal.show();
-  });
+  
+  const files = await vscode.workspace.findFiles('src/**/*.{ts,tsx,vue,svelte}');
+  if (files.length > 0) {
+    const picked = await vscode.window.showQuickPick(
+      files.map(f => ({
+        label: path.basename(f.fsPath),
+        description: path.dirname(f.fsPath),
+        value: f.fsPath
+      })),
+      { placeHolder: 'Select a file' }
+    );
+    return picked?.value;
+  }
+  
+  vscode.window.showWarningMessage('No source file found');
+  return undefined;
 }
 
 /**
- * Open webview panel
+ * Run veritas command
  */
-function openPanel() {
-  if (panel) {
-    panel.reveal();
-    return;
-  }
-
-  panel = vscode.window.createWebviewPanel(
-    'ai-test-view',
-    'AI-Test Panel',
-    vscode.ViewColumn.Two,
-    {
-      enableScripts: true,
-      retainContextWhenHidden: true
+async function runVeritasCommand(args: string, taskName: string): Promise<void> {
+  statusBar.text = `$(sync~spin) ${taskName}...`;
+  
+  try {
+    const config = vscode.workspace.getConfiguration('veritas');
+    const apiKey = config.get<string>('apiKey') || process.env.OPENAI_API_KEY;
+    
+    if (!apiKey && !args.includes('analyze')) {
+      vscode.window.showErrorMessage('API Key not set. Configure in Settings or set OPENAI_API_KEY');
+      statusBar.text = '$(robot) Veritas';
+      return;
     }
-  );
-
-  panel.webview.html = getWebviewHtml();
-
-  panel.onDidDispose(() => {
-    panel = undefined;
-  });
+    
+    const output = await execAsync(`npx veritas ${args}`, {
+      cwd: vscode.workspace.rootPath || process.cwd(),
+      env: { ...process.env, OPENAI_API_KEY: apiKey || '' }
+    });
+    
+    // Parse output
+    const lines = output.stdout.split('\n').filter(Boolean);
+    for (const line of lines.slice(-3)) {
+      vscode.window.showInformationMessage(line);
+    }
+    
+    statusBar.text = '$(check) Done!';
+    setTimeout(() => {
+      statusBar.text = '$(robot) Veritas';
+    }, 3000);
+    
+  } catch (error: any) {
+    vscode.window.showErrorMessage(`Error: ${error.message}`);
+    statusBar.text = '$(alert) Error';
+  }
 }
 
 /**
- * Get webview HTML
+ * Deactivate
  */
-function getWebviewHtml(): string {
-  return `
-<!DOCTYPE html>
-<html>
-<head>
-  <style>
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      padding: 20px;
-      background: #1e1e1e;
-      color: #d4d4d4;
-    }
-    h2 { color: #569cd6; }
-    .btn {
-      background: #0e639c;
-      color: white;
-      border: none;
-      padding: 10px 20px;
-      margin: 5px;
-      cursor: pointer;
-      border-radius: 4px;
-    }
-    .btn:hover { background: #1177bb; }
-    .input {
-      background: #3c3c3c;
-      border: 1px solid #555;
-      color: white;
-      padding: 8px;
-      width: 300px;
-      margin: 5px;
-    }
-    .log {
-      background: #1e1e1e;
-      border: 1px solid #333;
-      padding: 10px;
-      margin-top: 20px;
-      max-height: 300px;
-      overflow-y: auto;
-      font-family: monospace;
-      font-size: 12px;
-    }
-    .success { color: #4ec9b0; }
-    .error { color: #f14c4c; }
-    .info { color: #569cd6; }
-  </style>
-</head>
-<body>
-  <h2>🤖 AI-Test V2</h2>
-  
-  <div>
-    <input type="text" id="url" class="input" placeholder="URL (e.g. http://localhost:3000)" value="http://localhost:3000">
-    <button class="btn" onclick="recordTraffic()">📡 Record Traffic</button>
-  </div>
-  
-  <div style="margin-top: 10px;">
-    <button class="btn" onclick="autoGenerate()">🚀 Auto Generate</button>
-  </div>
-  
-  <div class="log" id="log">
-    <div class="info">Ready. Select a file and click a button to start.</div>
-  </div>
-  
-  <script>
-    function log(msg, type = 'info') {
-      const div = document.createElement('div');
-      div.className = type;
-      div.textContent = msg;
-      document.getElementById('log').appendChild(div);
-    }
-    
-    async function recordTraffic() {
-      const url = document.getElementById('url').value;
-      log('Recording traffic from: ' + url);
-      // This would communicate with the extension
-      vscode.postMessage({ command: 'record', url });
-    }
-    
-    async function autoGenerate() {
-      log('Auto generating tests...');
-      vscode.postMessage({ command: 'auto' });
-    }
-  </script>
-</body>
-</html>
-  `;
+export function deactivate() {
+  console.log('Veritas extension deactivated');
 }
-
-export function deactivate() {}

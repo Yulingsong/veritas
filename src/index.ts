@@ -17,6 +17,9 @@ import { createAIProvider } from './ai/index.js';
 import { MockGenerator } from './mocker/index.js';
 import { loadConfig } from './config/index.js';
 import { createLogger } from './logger/index.js';
+import { Cache } from './cache/index.js';
+import { generateReport } from './reporter/index.js';
+import { pluginManager } from './plugins/index.js';
 
 const VERSION = '1.0.0';
 
@@ -30,9 +33,15 @@ export { loadConfig, defaultConfig } from './config/index.js';
 export type { VeritasConfig } from './config/index.js';
 export { createLogger } from './logger/index.js';
 export type { LogLevel, Logger } from './logger/index.js';
+export { Cache, cached } from './cache/index.js';
+export { generateReport } from './reporter/index.js';
+export type { TestReport, ReportSummary } from './reporter/index.js';
+export { pluginManager } from './plugins/index.js';
+export type { VeritasPlugin, PluginContext } from './plugins/index.js';
 
 // CLI Entry Point
 const log = createLogger({ level: 'info', timestamp: true });
+const cache = new Cache();
 
 async function cli() {
   const config = loadConfig();
@@ -42,6 +51,33 @@ async function cli() {
     .name('veritas')
     .description('AI-powered frontend testing with real browser and API data')
     .version(VERSION);
+
+  // config
+  program
+    .command('config')
+    .description('Show configuration')
+    .action(() => {
+      console.log(JSON.stringify(config, null, 2));
+    });
+
+  // cache
+  program
+    .command('cache')
+    .description('Cache management')
+    .option('--clear', 'Clear cache')
+    .option('--stats', 'Show cache stats')
+    .action((opts) => {
+      if (opts.clear) {
+        cache.clear();
+        console.log(pc.green('Cache cleared'));
+      } else if (opts.stats) {
+        const stats = cache.getStats();
+        console.log(`Entries: ${stats.entries}`);
+        console.log(`Size: ${(stats.size / 1024).toFixed(2)} KB`);
+      } else {
+        console.log('Use --clear or --stats');
+      }
+    });
 
   // generate
   program
@@ -54,34 +90,60 @@ async function cli() {
     .option('--ai-key <key>', 'AI key')
     .option('--provider <p>', 'AI provider', config.ai.provider)
     .option('--traffic <file>', 'Traffic data file')
+    .option('--no-cache', 'Disable cache')
     .action(async (file: string, opts: any) => {
       if (!fs.existsSync(file)) {
         console.error(pc.red(`File not found: ${file}`));
         return;
       }
-      
+
       const code = fs.readFileSync(file, 'utf-8');
       const key = opts.aiKey || process.env.OPENAI_API_KEY || process.env.ANTHROPIC_API_KEY;
-      
+
       if (!key) {
         console.error(pc.red('API key required'));
         return;
       }
-      
+
+      // Check cache
+      if (!opts.noCache) {
+        const cacheKey = cache.generateKey(code, opts.framework, opts.testFramework);
+        const cached = cache.get<string>(cacheKey);
+        if (cached) {
+          console.log(pc.gray('Using cached result'));
+          const outPath = path.join(opts.output, path.basename(file).replace(/\.(ts|tsx)$/, '.test.ts'));
+          fs.writeFileSync(outPath, cached);
+          console.log(pc.green(`✓ Test generated (cached): ${outPath}`));
+          return;
+        }
+      }
+
       let trafficData;
       if (opts.traffic && fs.existsSync(opts.traffic)) {
-        try { trafficData = JSON.parse(fs.readFileSync(opts.traffic, 'utf-8')); } 
+        try { trafficData = JSON.parse(fs.readFileSync(opts.traffic, 'utf-8')); }
         catch { log.warn('Failed to load traffic data'); }
       }
-      
+
+      // Run plugins
+      const request = await pluginManager.onGenerate({ code, file, framework: opts.framework, testFramework: opts.testFramework, testType: opts.testType, trafficData });
+
       const provider = createAIProvider(opts.provider, key);
       const gen = new AITestGenerator(provider);
-      const result = await gen.generate({ code, file, framework: opts.framework, testFramework: opts.testFramework, testType: opts.testType, trafficData });
-      
+      let result = await gen.generate(request);
+
+      // Run afterGenerate plugins
+      result = await pluginManager.afterGenerate(result);
+
+      // Cache result
+      if (!opts.noCache) {
+        const cacheKey = cache.generateKey(code, opts.framework, opts.testFramework);
+        cache.set(cacheKey, result.content);
+      }
+
       if (!fs.existsSync(opts.output)) fs.mkdirSync(opts.output, { recursive: true });
       const outPath = path.join(opts.output, path.basename(result.file));
       fs.writeFileSync(outPath, result.content);
-      
+
       console.log(pc.green(`✓ Test generated: ${outPath}`));
     });
 
@@ -114,16 +176,16 @@ async function cli() {
         console.error(pc.red(`File not found: ${file}`));
         return;
       }
-      
+
       const trafficData = JSON.parse(fs.readFileSync(file, 'utf-8'));
       const generator = new MockGenerator(trafficData);
-      
+
       const content = opts.type === 'msw' ? generator.toMSW() : generator.toVitest();
       const outFile = opts.output || (opts.type === 'msw' ? 'mocks/handlers.ts' : '__mocks__/api.ts');
-      
+
       const dir = path.dirname(outFile);
       if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-      
+
       fs.writeFileSync(outFile, content);
       console.log(pc.green(`✓ Mock generated: ${outFile}`));
     });
@@ -140,7 +202,7 @@ async function cli() {
         console.error(pc.red(`File not found: ${file}`));
         return;
       }
-      
+
       let trafficData;
       if (opts.url) {
         console.log(pc.gray('Recording traffic...'));
@@ -149,20 +211,64 @@ async function cli() {
         await rec.waitForInteraction(config.recorder.duration);
         trafficData = await rec.stop();
       }
-      
+
       const code = fs.readFileSync(file, 'utf-8');
       const key = opts.aiKey || process.env.OPENAI_API_KEY;
       if (!key) { console.error(pc.red('API key required')); return; }
-      
+
       const provider = createAIProvider(config.ai.provider, key);
       const gen = new AITestGenerator(provider);
       const result = await gen.generate({ code, file, framework: config.analyzer.framework, testFramework: config.generator.testFramework, testType: config.generator.testType, trafficData });
-      
+
       if (!fs.existsSync(opts.output)) fs.mkdirSync(opts.output, { recursive: true });
       const outPath = path.join(opts.output, path.basename(result.file));
       fs.writeFileSync(outPath, result.content);
-      
+
       console.log(pc.green(`✓ Test generated: ${outPath}`));
+    });
+
+  // analyze
+  program
+    .command('analyze <file>')
+    .description('Analyze source code')
+    .option('-f, --framework <f>', 'Framework', config.analyzer.framework)
+    .action(async (file: string, opts: any) => {
+      if (!fs.existsSync(file)) {
+        console.error(pc.red(`File not found: ${file}`));
+        return;
+      }
+
+      const code = fs.readFileSync(file, 'utf-8');
+      const analyzer = new CodeAnalyzer(opts.framework);
+      const components = analyzer.analyze(code, file);
+
+      console.log(pc.cyan(`\nFound ${components.length} component(s):\n`));
+
+      for (const comp of components) {
+        console.log(pc.bold(`${comp.name} (${comp.type})`));
+        console.log(pc.gray(`  Props: ${comp.props.map(p => p.name).join(', ') || 'none'}`));
+        console.log(pc.gray(`  State: ${comp.state.length || 'none'}`));
+        console.log(pc.gray(`  Effects: ${comp.effects.length || 'none'}`));
+        console.log(pc.gray(`  API calls: ${comp.apis.length || 'none'}`));
+        console.log();
+      }
+    });
+
+  // report
+  program
+    .command('report <result-file>')
+    .description('Generate test report')
+    .option('-f, --format <f>', 'Format', 'html')
+    .option('-o, --output <file>', 'Output')
+    .action(async (file: string, opts: any) => {
+      if (!fs.existsSync(file)) {
+        console.error(pc.red(`File not found: ${file}`));
+        return;
+      }
+
+      const results = JSON.parse(fs.readFileSync(file, 'utf-8'));
+      generateReport(results, { format: opts.format, outputPath: opts.output });
+      console.log(pc.green(`✓ Report generated: ${opts.output || 'test-report.' + opts.format}`));
     });
 
   await program.parseAsync(process.argv);
