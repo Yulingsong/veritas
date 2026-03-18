@@ -1,0 +1,46 @@
+# Dependencies
+node_modules/
+
+# Build
+dist/
+dist-cjs/
+build/
+
+# Test
+coverage/
+tests/
+__tests__/
+*.test.ts
+*.spec.ts
+
+# Docs
+docs/
+*.md
+!.md
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Cache
+.veritas-cache/
+.cache/
+
+# Config (private)
+.env
+.env.local
+.veritas.config.json
+
+# Temporary
+*.tmp
+*.temp
