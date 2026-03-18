@@ -5,3 +5,32 @@ dist-cjs/
 .DS_Store
 .vscode-test/
 *.vsix
+
+# Test output
+tests/
+__tests__/
+*.test.ts
+*.spec.ts
+coverage/
+
+# Traffic recordings
+traffic.json
+*.traffic.json
+
+# Config with secrets
+veritas.config.json
+.env
+.env.local
+.env.*.local
+
+# Build
+build/
+out/
+
+# IDE
+.idea/
+*.swp
+*.swo
+
+# OS
+Thumbs.db

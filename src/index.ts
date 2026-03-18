@@ -1,199 +1,171 @@
 #!/usr/bin/env node
 /**
- * AI-Test V2 - CLI Entry
+ * Veritas - AI-Powered Frontend Testing
+ * 
+ * @author Yulingsong
+ * @license MIT
  */
 
 import { Command } from 'commander';
 import * as fs from 'fs';
 import * as path from 'path';
-import { chromium } from 'playwright';
-import OpenAI from 'openai';
+import pc from 'picocolors';
+import { CodeAnalyzer } from './analyzer/index.js';
+import { TrafficRecorder } from './recorder/index.js';
+import { AITestGenerator } from './generator/index.js';
+import { createAIProvider } from './ai/index.js';
+import { MockGenerator } from './mocker/index.js';
+import { loadConfig } from './config/index.js';
+import { createLogger } from './logger/index.js';
 
 const VERSION = '1.0.0';
 
-// Colors
-const red = (s: string) => `\x1b[31m${s}\x1b[0m`;
-const green = (s: string) => `\x1b[32m${s}\x1b[0m`;
-const gray = (s: string) => `\x1b[90m${s}\x1b[0m`;
-const cyan = (s: string) => `\x1b[36m${s}\x1b[0m`;
+// Re-export for library usage
+export { CodeAnalyzer } from './analyzer/index.js';
+export { TrafficRecorder } from './recorder/index.js';
+export { AITestGenerator } from './generator/index.js';
+export { createAIProvider } from './ai/index.js';
+export { MockGenerator } from './mocker/index.js';
+export { loadConfig, defaultConfig } from './config/index.js';
+export type { VeritasConfig } from './config/index.js';
+export { createLogger } from './logger/index.js';
+export type { LogLevel, Logger } from './logger/index.js';
 
-async function main() {
+// CLI Entry Point
+const log = createLogger({ level: 'info', timestamp: true });
+
+async function cli() {
+  const config = loadConfig();
   const program = new Command();
 
   program
-    .name('ai-test')
-    .description('AI-powered frontend testing')
+    .name('veritas')
+    .description('AI-powered frontend testing with real browser and API data')
     .version(VERSION);
 
-  // generate command
+  // generate
   program
     .command('generate <file>')
-    .description('Generate tests')
-    .option('-o, --output <dir>', 'Output dir', './tests')
-    .option('--ai-key <key>', 'OpenAI key')
+    .description('Generate tests from source file')
+    .option('-f, --framework <f>', 'Framework', config.analyzer.framework)
+    .option('-t, --test-framework <f>', 'Test framework', config.generator.testFramework)
+    .option('-y, --test-type <t>', 'Test type', config.generator.testType)
+    .option('-o, --output <dir>', 'Output dir', config.generator.outputDir)
+    .option('--ai-key <key>', 'AI key')
+    .option('--provider <p>', 'AI provider', config.ai.provider)
+    .option('--traffic <file>', 'Traffic data file')
     .action(async (file: string, opts: any) => {
       if (!fs.existsSync(file)) {
-        console.error(red(`File not found: ${file}`));
+        console.error(pc.red(`File not found: ${file}`));
         return;
       }
+      
       const code = fs.readFileSync(file, 'utf-8');
-      const key = opts.aiKey || process.env.OPENAI_API_KEY;
+      const key = opts.aiKey || process.env.OPENAI_API_KEY || process.env.ANTHROPIC_API_KEY;
+      
       if (!key) {
-        console.error(red('API key required. Set OPENAI_API_KEY'));
+        console.error(pc.red('API key required'));
         return;
       }
       
-      console.log(gray('Generating test with AI...'));
-      const test = await generateTest(code, key);
+      let trafficData;
+      if (opts.traffic && fs.existsSync(opts.traffic)) {
+        try { trafficData = JSON.parse(fs.readFileSync(opts.traffic, 'utf-8')); } 
+        catch { log.warn('Failed to load traffic data'); }
+      }
       
-      const outDir = opts.output;
-      if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
-      const outPath = path.join(outDir, path.basename(file).replace(/\.(ts|tsx)$/, '.test.ts'));
-      fs.writeFileSync(outPath, test);
-      console.log(green(`Test generated: ${outPath}`));
+      const provider = createAIProvider(opts.provider, key);
+      const gen = new AITestGenerator(provider);
+      const result = await gen.generate({ code, file, framework: opts.framework, testFramework: opts.testFramework, testType: opts.testType, trafficData });
+      
+      if (!fs.existsSync(opts.output)) fs.mkdirSync(opts.output, { recursive: true });
+      const outPath = path.join(opts.output, path.basename(result.file));
+      fs.writeFileSync(outPath, result.content);
+      
+      console.log(pc.green(`✓ Test generated: ${outPath}`));
     });
 
-  // record command
+  // record
   program
     .command('record <url>')
     .description('Record API traffic')
-    .option('-o, --output <file>', 'Output file', 'traffic.json')
+    .option('-o, --output <file>', 'Output', config.recorder.outputFile)
+    .option('--headless', 'Headless', true)
+    .option('--duration <ms>', 'Duration', String(config.recorder.duration))
     .action(async (url: string, opts: any) => {
-      console.log(gray(`Recording from: ${url}`));
-      const data = await recordTraffic(url);
+      console.log(pc.gray(`Recording from: ${url}`));
+      const rec = new TrafficRecorder();
+      await rec.start(url, { headless: opts.headless });
+      await rec.waitForInteraction(Number(opts.duration));
+      const data = await rec.stop();
       fs.writeFileSync(opts.output, JSON.stringify(data, null, 2));
-      console.log(green(`Traffic saved: ${opts.output}`));
-      console.log(gray(`Requests: ${data.stats.totalRequests}`));
+      console.log(pc.green(`✓ Traffic saved: ${opts.output}`));
+      console.log(pc.gray(`Requests: ${data.stats.totalRequests}`));
     });
 
-  // auto command (full workflow)
+  // mock
   program
-    .command('auto <file>')
-    .description('Generate with traffic')
-    .option('-u, --url <url>', 'URL to record')
-    .option('-o, --output <dir>', 'Output dir', './tests')
+    .command('mock <file>')
+    .description('Generate mocks from traffic')
+    .option('-t, --type <type>', 'Type', 'msw')
+    .option('-o, --output <file>', 'Output')
     .action(async (file: string, opts: any) => {
       if (!fs.existsSync(file)) {
-        console.error(red(`File not found: ${file}`));
+        console.error(pc.red(`File not found: ${file}`));
         return;
       }
-      const code = fs.readFileSync(file, 'utf-8');
+      
+      const trafficData = JSON.parse(fs.readFileSync(file, 'utf-8'));
+      const generator = new MockGenerator(trafficData);
+      
+      const content = opts.type === 'msw' ? generator.toMSW() : generator.toVitest();
+      const outFile = opts.output || (opts.type === 'msw' ? 'mocks/handlers.ts' : '__mocks__/api.ts');
+      
+      const dir = path.dirname(outFile);
+      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+      
+      fs.writeFileSync(outFile, content);
+      console.log(pc.green(`✓ Mock generated: ${outFile}`));
+    });
+
+  // auto
+  program
+    .command('auto <file>')
+    .description('Full workflow: record + generate')
+    .option('-u, --url <url>', 'URL')
+    .option('-o, --output <dir>', 'Output', config.generator.outputDir)
+    .option('--ai-key <key>', 'AI key')
+    .action(async (file: string, opts: any) => {
+      if (!fs.existsSync(file)) {
+        console.error(pc.red(`File not found: ${file}`));
+        return;
+      }
+      
       let trafficData;
-      
       if (opts.url) {
-        console.log(gray('Recording traffic...'));
-        trafficData = await recordTraffic(opts.url);
+        console.log(pc.gray('Recording traffic...'));
+        const rec = new TrafficRecorder();
+        await rec.start(opts.url, { headless: true });
+        await rec.waitForInteraction(config.recorder.duration);
+        trafficData = await rec.stop();
       }
       
-      const key = process.env.OPENAI_API_KEY;
-      if (!key) {
-        console.error(red('API key required. Set OPENAI_API_KEY'));
-        return;
-      }
+      const code = fs.readFileSync(file, 'utf-8');
+      const key = opts.aiKey || process.env.OPENAI_API_KEY;
+      if (!key) { console.error(pc.red('API key required')); return; }
       
-      console.log(gray('Generating test...'));
-      const test = await generateTest(code, key, trafficData);
+      const provider = createAIProvider(config.ai.provider, key);
+      const gen = new AITestGenerator(provider);
+      const result = await gen.generate({ code, file, framework: config.analyzer.framework, testFramework: config.generator.testFramework, testType: config.generator.testType, trafficData });
       
-      const outDir = opts.output;
-      if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
-      const outPath = path.join(outDir, path.basename(file).replace(/\.(ts|tsx)$/, '.test.ts'));
-      fs.writeFileSync(outPath, test);
-      console.log(green(`Test generated: ${outPath}`));
+      if (!fs.existsSync(opts.output)) fs.mkdirSync(opts.output, { recursive: true });
+      const outPath = path.join(opts.output, path.basename(result.file));
+      fs.writeFileSync(outPath, result.content);
+      
+      console.log(pc.green(`✓ Test generated: ${outPath}`));
     });
 
   await program.parseAsync(process.argv);
 }
 
-/**
- * Record browser traffic
- */
-async function recordTraffic(url: string) {
-  const browser = await chromium.launch({ headless: true });
-  const page = await browser.newPage();
-  
-  const requests: any[] = [];
-  const responses: any[] = [];
-  
-  // Setup listeners
-  page.on('request', (req) => {
-    requests.push({
-      url: req.url(),
-      method: req.method(),
-      headers: req.headers()
-    });
-  });
-  
-  page.on('response', (res) => {
-    responses.push({
-      url: res.url(),
-      status: res.status(),
-      statusText: res.statusText()
-    });
-  });
-  
-  await page.goto(url, { waitUntil: 'networkidle' });
-  await page.waitForTimeout(3000);
-  
-  await browser.close();
-  
-  return {
-    requests,
-    responses,
-    stats: {
-      totalRequests: requests.length,
-      byMethod: requests.reduce((acc: any, r) => {
-        acc[r.method] = (acc[r.method] || 0) + 1;
-        return acc;
-      }, {})
-    }
-  };
-}
-
-/**
- * Generate test with AI
- */
-async function generateTest(code: string, apiKey: string, trafficData?: any): Promise<string> {
-  const openai = new OpenAI({ apiKey });
-  
-  let prompt = `Generate Vitest test for this React component:
-
-\`\`\`tsx
-${code}
-\`\`\`
-`;
-
-  if (trafficData?.requests?.length) {
-    prompt += `\nUse this real API data:\n${trafficData.requests.slice(0, 5).map((r: any) => `- ${r.method} ${r.url}`).join('\n')}\n`;
-  }
-
-  prompt += `\nUse @testing-library/react. Output only test code.`;
-
-  try {
-    const res = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
-      messages: [{ role: 'user', content: prompt }],
-      temperature: 0.7
-    });
-    return res.choices[0]?.message?.content || fallbackTest();
-  } catch (e) {
-    console.error(gray('AI error, using fallback'));
-    return fallbackTest();
-  }
-}
-
-/**
- * Fallback test template
- */
-function fallbackTest(): string {
-  return `import { render, screen, fireEvent } from '@testing-library/react';
-import { describe, it, expect, vi } from 'vitest';
-
-describe('Component Tests', () => {
-  it('should render', () => {
-    expect(true).toBe(true);
-  });
-});
-`;
-}
-
-main().catch(console.error);
+cli().catch(console.error);
