@@ -11,15 +11,44 @@
     "dev": "tsx src/cli/index.ts",
     "build": "tsc",
     "test": "node dist/cli/index.js",
+    "test:unit": "vitest run",
+    "test:integration": "vitest run --integration",
+    "test:coverage": "vitest run --coverage",
     "generate": "tsx src/cli/index.ts generate",
     "record": "tsx src/cli/index.ts record",
+    "mock": "tsx src/cli/index.ts mock",
     "auto": "tsx src/cli/index.ts auto",
+    "analyze": "tsx src/cli/index.ts analyze",
+    "report": "tsx src/cli/index.ts report",
     "lint": "eslint src --ext .ts",
-    "format": "prettier --write src/**/*.ts"
+    "lint:fix": "eslint src --ext .ts --fix",
+    "format": "prettier --write src/**/*.ts",
+    "prepare": "npm run build"
   },
-  "keywords": ["ai", "test", "automation", "frontend", "react", "playwright", "veritas"],
+  "keywords": [
+    "ai",
+    "test",
+    "automation",
+    "frontend",
+    "react",
+    "vue",
+    "playwright",
+    "vitest",
+    "jest",
+    "testing",
+    "mock",
+    "coverage"
+  ],
   "author": "Yulingsong",
   "license": "MIT",
+  "homepage": "https://github.com/Yulingsong/veritas#readme",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Yulingsong/veritas.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Yulingsong/veritas/issues"
+  },
   "dependencies": {
     "commander": "^12.1.0",
     "openai": "^4.77.0",
@@ -34,8 +63,8 @@
   "engines": {
     "node": ">=18.0.0"
   },
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/Yulingsong/veritas.git"
+  "funding": {
+    "type": "opencollective",
+    "url": "https://opencollective.com/veritas"
   }
 }
