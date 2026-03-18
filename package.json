@@ -24,17 +24,28 @@
     "dev": "tsx src/cli/index.ts",
     "build": "tsc && tsc --emitDeclarationOnly",
     "build:watch": "tsc --watch",
+    "build:esbuild": "node scripts/build.esbuild.js",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "test:ui": "vitest --ui",
+    "test:ci": "vitest run --reporter=dot --coverage",
     "lint": "eslint src --ext .ts",
     "lint:fix": "eslint src --ext .ts --fix",
+    "lint:staged": "lint-staged",
     "format": "prettier --write src/**/*.ts",
+    "format:check": "prettier --check src/**/*.ts",
     "typecheck": "tsc --noEmit",
     "prepare": "npm run build",
     "release": "standard-version",
-    "publish": "npm publish --access public"
+    "release:dry": "standard-version --dry-run",
+    "publish": "npm publish --access public",
+    "docs": "tsx docs/api.ts",
+    "docs:serve": "npx serve docs",
+    "clean": "rm -rf dist coverage",
+    "clean:all": "rm -rf dist coverage node_modules",
+    "postinstall": "npm run build",
+    "prepublishOnly": "npm run test && npm run lint && npm run build"
   },
   "keywords": [
     "ai",
@@ -77,7 +88,9 @@
     "@typescript-eslint/eslint-plugin": "^7.0.0",
     "@typescript-eslint/parser": "^7.0.0",
     "prettier": "^3.2.0",
-    "standard-version": "^9.5.0"
+    "standard-version": "^9.5.0",
+    "lint-staged": "^15.2.0",
+    "esbuild": "^0.20.0"
   },
   "engines": {
     "node": ">=18.0.0"
