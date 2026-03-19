@@ -5,15 +5,24 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/Yulingsong/veritas/stargazers">
+    <img src="https://img.shields.io/github/stars/Yulingsong/veritas" alt="Stars">
+  </a>
+  <a href="https://github.com/Yulingsong/veritas/network">
+    <img src="https://img.shields.io/github/forks/Yulingsong/veritas" alt="Forks">
+  </a>
   <img src="https://img.shields.io/badge/version-1.0.0-blue" alt="Version">
   <img src="https://img.shields.io/badge/license-MIT-green" alt="License">
   <img src="https://img.shields.io/node/v/veritas-orange" alt="Node">
-  <img src="https://img.shields.io/github/stars/Yulingsong/veritas" alt="Stars">
-  <img src="https://img.shields.io/npm/dm/veritas" alt="Downloads">
 </p>
 
 <p align="center">
   <strong>AI 驱动的自动化前端测试工具 | 自动化测试生成</strong>
+</p>
+
+<p align="center">
+  <a href="https://github.com/Yulingsong/veritas/blob/master/README.md">中文</a> •
+  <a href="https://github.com/Yulingsong/veritas/blob/master/README.en.md">English</a>
 </p>
 
 ---
@@ -146,6 +155,9 @@ export GEMINI_API_KEY=xxx
 - [架构设计](./docs/architecture.md) - 系统架构
 - [常见问题](./docs/faq.md) - FAQ
 - [使用教程](./docs/tutorial.md) - 详细教程
+- [故障排除](./TROUBLESHOOTING.md) - 问题排查
+- [贡献指南](./CONTRIBUTING.md) - 如何贡献
+- [行为准则](./CODE_OF_CONDUCT.md) - 社区准则
 
 ---
 
