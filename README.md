@@ -2,6 +2,8 @@
 
 > AI-powered frontend testing with real browser and API data
 
+[English](./README.md) | [中文](./docs/README.zh-CN.md)
+
 [![CI](https://github.com/Yulingsong/veritas/actions/workflows/ci.yml/badge.svg)](https://github.com/Yulingsong/veritas/actions)
 [![npm version](https://img.shields.io/npm/v/veritas)](https://www.npmjs.com/package/veritas)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
