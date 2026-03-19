@@ -1,42 +1,37 @@
-# Veritas 中文文档
+# Veritas 🤖
 
-> AI 驱动的自动化前端测试工具
+<p align="center">
+  <img src="https://img.shields.io/badge/version-1.0.0-blue" alt="Version">
+  <img src="https://img.shields.io/badge/license-MIT-green" alt="License">
+  <img src="https://img.shields.io/node/v/veritas-orange" alt="Node">
+  <img src="https://img.shields.io/github/stars/Yulingsong/veritas" alt="Stars">
+  <img src="https://img.shields.io/npm/dm/veritas" alt="Downloads">
+</p>
 
-[English](./README.en.md) | 中文
+<p align="center">
+  <strong>AI 驱动的自动化前端测试工具 | 自动化测试生成</strong>
+</p>
 
-## 什么是 Veritas？
+---
 
-Veritas 是一个利用 AI 技术自动生成前端测试的工具。它能够：
-- 录制真实浏览器的网络流量
-- 分析源代码提取组件信息
-- 基于真实数据和 AI 生成高质量测试用例
-- 自动生成 Mock 数据
-
-## 核心特性
+## ✨ 特性
 
 | 特性 | 说明 |
 |------|------|
-| 🌐 流量录制 | 使用真实浏览器捕获 API 请求和响应 |
-| 🤖 AI 生成 | 基于代码和流量数据自动生成测试 |
-| ⚡ 自动 Mock | 从流量数据自动生成 Mock 服务器 |
-| 📦 多框架支持 | 支持 Vitest、Jest、Playwright |
-| 🔧 完整工具集 | Fixtures、Matchers、Snapshots、Factory |
+| 🌐 **流量录制** | 使用真实浏览器捕获 API 请求和响应 |
+| 🤖 **AI 生成** | 基于代码和流量数据自动生成测试 |
+| ⚡ **自动 Mock** | 从流量数据自动生成 Mock 服务器 |
+| 📦 **多框架支持** | Vitest、Jest、Playwright |
+| 🔧 **完整工具集** | Fixtures、Matchers、Snapshots、Factory |
 
-## 安装
+---
+
+## 🚀 快速开始
 
 ```bash
-# 全局安装
+# 安装
 npm install -g veritas
 
-# 或使用 npx
-npx veritas generate <文件路径>
-```
-
-## 快速开始
-
-### 生成测试
-
-```bash
 # 从组件生成测试
 veritas generate src/components/Button.tsx
 
@@ -47,26 +42,66 @@ veritas record http://localhost:3000
 veritas auto src/components/Button.tsx --url http://localhost:3000
 ```
 
-### 生成 Mock
+---
 
-```bash
-# 从流量数据生成 Mock
-veritas mock traffic.json
+## 📖 示例
+
+### 输入：React 组件
+
+```tsx
+// src/components/Counter.tsx
+import React, { useState } from 'react';
+
+export function Counter() {
+  const [count, setCount] = useState(0);
+  
+  return (
+    <div>
+      <span data-testid="count">{count}</span>
+      <button onClick={() => setCount(count + 1)}>+</button>
+      <button onClick={() => setCount(count - 1)}>-</button>
+    </div>
+  );
+}
 ```
 
-## CLI 命令
+### 输出：测试代码
 
-| 命令 | 说明 |
-|------|------|
-| `veritas generate <file>` | 生成测试 |
-| `veritas record <url>` | 录制流量 |
-| `veritas auto <file>` | 自动生成 |
-| `veritas mock <file>` | 生成 Mock |
-| `veritas analyze <file>` | 分析代码 |
-| `veritas test <file>` | 运行测试 |
-| `veritas config` | 查看配置 |
+```tsx
+// tests/Counter.test.tsx
+import { render, screen, fireEvent } from '@testing-library/react';
+import { Counter } from '../src/components/Counter';
 
-## 配置说明
+describe('Counter', () => {
+  it('should increment count', () => {
+    render(<Counter />);
+    fireEvent.click(screen.getByText('+'));
+    expect(screen.getByTestId('count')).toHaveTextContent('1');
+  });
+
+  it('should decrement count', () => {
+    render(<Counter initialValue={5} />);
+    fireEvent.click(screen.getByText('-'));
+    expect(screen.getByTestId('count')).toHaveTextContent('4');
+  });
+});
+```
+
+---
+
+## 📦 安装
+
+```bash
+# 全局安装
+npm install -g veritas
+
+# 或使用 npx
+npx veritas generate <文件路径>
+```
+
+---
+
+## ⚙️ 配置
 
 创建 `veritas.config.json`：
 
@@ -79,221 +114,60 @@ veritas mock traffic.json
   "generator": {
     "testFramework": "vitest",
     "outputDir": "./tests"
-  },
-  "recorder": {
-    "headless": true,
-    "duration": 5000
   }
 }
 ```
-
-## AI 提供商
-
-### OpenAI
-
-```bash
-export OPENAI_API_KEY=sk-xxx
-veritas generate src/...
-```
-
-### Anthropic Claude
-
-```bash
-export ANTHROPIC_API_KEY=sk-ant-xxx
-veritas generate src/... --ai-provider anthropic
-```
-
-### Google Gemini
-
-```bash
-export GEMINI_API_KEY=xxx
-veritas generate src/... --ai-provider gemini
-```
-
-## 测试框架
-
-### Vitest (默认)
-
-```json
-{
-  "generator": {
-    "testFramework": "vitest"
-  }
-}
-```
-
-### Jest
-
-```json
-{
-  "generator": {
-    "testFramework": "jest"
-  }
-}
-```
-
-### Playwright
-
-```json
-{
-  "generator": {
-    "testFramework": "playwright"
-  }
-}
-```
-
-## 项目结构
-
-```
-veritas/
-├── src/
-│   ├── ai/              # AI 提供商 (OpenAI, Claude, Gemini)
-│   ├── analyzer/        # 代码分析器
-│   ├── generator/       # 测试生成器
-│   ├── recorder/       # 流量录制器
-│   ├── mocker/         # Mock 生成器
-│   ├── executor/       # 测试执行器
-│   ├── cache/          # 缓存系统
-│   ├── reporter/       # 报告生成器
-│   └── plugins/        # 插件系统
-├── docs/               # 文档
-└── tests/              # 测试用例
-```
-
-## 插件系统
-
-Veritas 支持自定义插件扩展功能：
-
-```typescript
-import type { Plugin } from 'veritas';
-
-const myPlugin: Plugin = {
-  name: 'my-plugin',
-  type: 'analyzer',
-  
-  init(ctx) {
-    ctx.hooks.analyze.tap('my-plugin', (code, filePath) => {
-      // 自定义分析逻辑
-      return result;
-    });
-  }
-};
-```
-
-## 使用教程
-
-### 完整示例：从零开始生成测试
-
-1. **安装 Veritas**
-   ```bash
-   npm install -g veritas
-   ```
-
-2. **创建待测试组件**
-   ```tsx
-   // src/components/Counter.tsx
-   import React, { useState } from 'react';
-
-   interface CounterProps {
-     initialValue?: number;
-   }
-
-   export function Counter({ initialValue = 0 }: CounterProps) {
-     const [count, setCount] = useState(initialValue);
-
-     return (
-       <div>
-         <span data-testid="count">{count}</span>
-         <button onClick={() => setCount(count + 1)}>+</button>
-         <button onClick={() => setCount(count - 1)}>-</button>
-       </div>
-     );
-   }
-   ```
-
-3. **生成测试**
-   ```bash
-   veritas generate src/components/Counter.tsx
-   ```
-
-4. **查看生成的测试**
-   ```tsx
-   import { describe, it, expect } from 'vitest';
-   import { render, screen, fireEvent } from '@testing-library/react';
-   import { Counter } from '../src/components/Counter';
-
-   describe('Counter', () => {
-     it('should render with initial value', () => {
-       render(<Counter initialValue={5} />);
-       expect(screen.getByTestId('count')).toHaveTextContent('5');
-     });
-
-     it('should increment count', () => {
-       render(<Counter />);
-       fireEvent.click(screen.getByText('+'));
-       expect(screen.getByTestId('count')).toHaveTextContent('1');
-     });
-   });
-   ```
-
-## 常见问题
-
-### 1. 安装失败
-
-**问题**: 提示权限错误
-
-**解决**:
-```bash
-sudo npm install -g veritas
-```
-
-### 2. 找不到命令
-
-**解决**:
-```bash
-npm list -g veritas
-echo $PATH
-```
-
-### 3. AI 生成失败
-
-**解决**:
-1. 检查 API Key 是否正确设置
-2. 检查网络连接
-3. 查看详细日志: `veritas --verbose generate src/...`
-
-## 开发指南
-
-```bash
-# 克隆项目
-git clone https://github.com/Yulingsong/veritas.git
-cd veritas
-
-# 安装依赖
-npm install
-
-# 开发模式
-npm run dev
-
-# 运行测试
-npm test
-
-# 构建
-npm run build
-```
-
-## 相关链接
-
-- [GitHub](https://github.com/Yulingsong/veritas)
-- [问题反馈](https://github.com/Yulingsong/veritas/issues)
 
 ---
 
-## 更多文档
+## 🤖 AI 提供商
 
-- [配置详解](./docs/config.md) - 配置文件选项说明
-- [API 参考](./docs/api.md) - 编程接口
+支持 OpenAI、Anthropic Claude、Google Gemini
+
+```bash
+export OPENAI_API_KEY=sk-xxx
+# 或
+export ANTHROPIC_API_KEY=sk-ant-xxx
+# 或
+export GEMINI_API_KEY=xxx
+```
+
+---
+
+## 📚 文档
+
+- [配置详解](./docs/config.md) - 配置文件选项
+- [API 参考](./docs/api.zh-CN.md) - 编程接口
 - [插件开发](./docs/plugins.md) - 自定义插件
 - [架构设计](./docs/architecture.md) - 系统架构
 - [常见问题](./docs/faq.md) - FAQ
 - [使用教程](./docs/tutorial.md) - 详细教程
+
+---
+
+## 🛠️ 开发
+
+```bash
+git clone https://github.com/Yulingsong/veritas.git
+cd veritas
+npm install
+npm run dev
+```
+
+---
+
+## ⭐ 贡献
+
+欢迎 Star 和 PR！
+
+---
+
+## 📄 License
+
+MIT License
+
+---
+
+<p align="center">
+  Made with ❤️ by <a href="https://github.com/Yulingsong">@Yulingsong</a>
+</p>
